@@ -276,6 +276,7 @@ pub fn log<H: Handler>(runtime: &mut Runtime, n: u8, handler: &mut H) -> Control
 }
 
 // Halt execution and register account for later deletion or send all Ether to address (post-Cancun)
+#[allow(dead_code)]
 pub fn suicide<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H> {
 	pop!(runtime, target);
 
