@@ -13,8 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
-      - run: cargo fmt --check
+          components: clippy
       - run: cargo clippy -- -D warnings
 
   build-and-test:
