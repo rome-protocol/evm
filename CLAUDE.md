@@ -68,3 +68,29 @@ Key changes from upstream SputnikVM (visible in recent PRs):
 - Halborn security audit fixes (PR #12)
 - SPL-related modifications including `TransferProhibited` error variant (PR #9)
 - Removed unused backend/gasometer crates (PR #11)
+
+## Agent Execution Guide
+
+- This is a SputnikVM fork. Changes are rare and high-impact.
+- Every opcode change affects all downstream repos (rome-evm-private, rome-sdk, rome-apps).
+- After any change, run `cargo test` here, then verify `rome-evm-private` builds against the local checkout (`../evm` path dependency).
+- The SELFDESTRUCT opcode is disabled — do not re-enable.
+- Handler trait modifications affect all EVM execution paths.
+
+## Change Impact Map
+
+| If you change... | Also check/update... |
+|-----------------|---------------------|
+| Any opcode implementation | `rome-evm-private/` (entrypoint macro, both program/ and emulator/) |
+| Handler trait | `rome-evm-private/` (implements Handler) |
+| Gas calculations | `rome-evm-private/` gasometer, `tests/` opcode suite |
+| evm-core (stack, memory) | All downstream: rome-evm-private, rome-sdk, rome-apps, tests |
+
+## Test Selection Guide
+
+| What Changed | Tests to Run |
+|-------------|-------------|
+| Any opcode | `cargo test` here + `cd ../rome-evm-private && cargo test` + `tests/` opcode suite |
+| Handler trait | `cargo test` + full rome-evm-private test suite |
+| Gas logic | `cargo test` + `tests/` opcode suite |
+| Core (stack/memory) | `cargo test` + everything downstream |
