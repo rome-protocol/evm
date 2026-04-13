@@ -11,19 +11,21 @@ Rome Protocol's fork of SputnikVM — a portable, stateless Ethereum Virtual Mac
 ```bash
 cargo build --release --all    # Build all crates
 cargo test                     # Run all tests
-cargo clippy --all-targets --all-features  # Lint
+cargo clippy                   # Lint (matches CI)
 cargo fmt                      # Format
 cargo fmt -- --check           # Check formatting without modifying
 ```
 
+CI (`.github/workflows/ci.yml`) runs `cargo clippy` (without `-D warnings`), `cargo build`, and `cargo test` on push/PR to `master`. `RUSTFLAGS: -Aunexpected_cfgs` is set at workflow level to tolerate pre-existing cfg warnings.
+
 ## Lint Configuration
 
-The root `src/lib.rs` enforces strict linting:
+The root `src/lib.rs` enforces strict linting at compile time:
 - `#![deny(warnings)]`
 - `#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]`
-- `#![deny(clippy::all, clippy::pedantic, clippy::nursery)]`
+- `#![deny(clippy::all, clippy::pedantic, clippy::nursery)]` (with `module_name_repetitions`, `missing_errors_doc`, `missing_panics_doc` allowed)
 
-All new public items require doc comments. Unsafe code is forbidden.
+All new public items require doc comments. Unsafe code is forbidden. Note: CI clippy runs without `-D warnings` — the crate-level `deny(warnings)` inside `lib.rs` is what surfaces lint failures during build.
 
 ## Architecture
 
