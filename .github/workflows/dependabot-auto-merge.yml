@@ -1,8 +1,8 @@
 # Sourced from: rome-protocol/rome-ops/templates/dependabot/dependabot-auto-merge.yml
 #
-# Phase 1: only github-actions patch + minor auto-merge.
-# Phase 2 (after 2 weeks of clean signal on rome-evm-private trial): expand to
-# cargo / npm / pip / gomod patch + minor.
+# Phase 2: auto-merge patch + minor for github_actions, cargo, npm, pip, gomod.
+# Docker stays manual indefinitely (nginx:1.30-alpine-slim curl regression precedent).
+# Major version bumps across all ecosystems still queue for human review.
 #
 # Security note: PR_URL is sourced from `github.event.pull_request.html_url`,
 # which is GitHub-generated (not user-controlled), routed through env: with
@@ -29,7 +29,11 @@ jobs:
 
       - name: Enable auto-merge for low-risk updates
         if: |
-          steps.meta.outputs.package-ecosystem == 'github_actions' &&
+          (steps.meta.outputs.package-ecosystem == 'github_actions' ||
+           steps.meta.outputs.package-ecosystem == 'cargo' ||
+           steps.meta.outputs.package-ecosystem == 'npm_and_yarn' ||
+           steps.meta.outputs.package-ecosystem == 'pip' ||
+           steps.meta.outputs.package-ecosystem == 'gomod') &&
           (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
            steps.meta.outputs.update-type == 'version-update:semver-minor')
         env:
