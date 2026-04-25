@@ -12,7 +12,7 @@ edition = "2018"
 log = { version = "0.4", default-features = false }
 evm-core = { version = "0.18", path = "core", default-features = false, features = ["with-serde"] }
 evm-runtime = { version = "0.18", path = "runtime", default-features = false }
-sha3 = { version = "0.8", default-features = false }
+sha3 = { version = "0.11", default-features = false }
 rlp = { version = "0.6", default-features = false }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 serde_bytes = { version = "0.11.5", optional = true }
