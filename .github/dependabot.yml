@@ -1,0 +1,45 @@
+# Sourced from: rome-protocol/rome-ops/templates/dependabot/rust.yml
+# (no docker section — evm has no Dockerfile; SputnikVM fork is no_std)
+
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: friday
+    open-pull-requests-limit: 8
+    labels:
+      - dependencies
+      - rust
+    groups:
+      cargo-patch-and-minor:
+        update-types:
+          - patch
+          - minor
+        exclude-patterns:
+          - "solana-*"
+          - "spl-token"
+          - "anchor-*"
+    ignore:
+      - dependency-name: "solana-*"
+      - dependency-name: "spl-token"
+      - dependency-name: "anchor-*"
+      - dependency-name: "curve25519-dalek"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: friday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    groups:
+      gh-actions:
+        update-types:
+          - patch
+          - minor
+          - major

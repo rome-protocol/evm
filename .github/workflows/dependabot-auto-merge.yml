@@ -1,0 +1,38 @@
+# Sourced from: rome-protocol/rome-ops/templates/dependabot/dependabot-auto-merge.yml
+#
+# Phase 1: only github-actions patch + minor auto-merge.
+# Phase 2 (after 2 weeks of clean signal on rome-evm-private trial): expand to
+# cargo / npm / pip / gomod patch + minor.
+#
+# Security note: PR_URL is sourced from `github.event.pull_request.html_url`,
+# which is GitHub-generated (not user-controlled), routed through env: with
+# quoted "$PR_URL" expansion — no direct ${{ }} interpolation in run:.
+
+name: Dependabot auto-merge
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for low-risk updates
+        if: |
+          steps.meta.outputs.package-ecosystem == 'github_actions' &&
+          (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+           steps.meta.outputs.update-type == 'version-update:semver-minor')
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash "$PR_URL"
