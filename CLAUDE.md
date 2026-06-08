@@ -9,14 +9,16 @@ Rome Protocol's fork of SputnikVM — a portable, stateless Ethereum Virtual Mac
 ## Build Commands
 
 ```bash
-cargo build --release --all    # Build all crates
-cargo test                     # Run all tests (none currently defined)
+cargo build                    # Build the root crate (pulls in evm-core + evm-runtime via path deps)
+cargo test                     # Run all tests (returns 0 from root — see "Agent Execution Guide" below)
 cargo clippy                   # Lint (matches CI)
 cargo fmt                      # Format
 cargo fmt -- --check           # Check formatting without modifying
 ```
 
-CI (`.github/workflows/ci.yml`) runs `cargo clippy`, `cargo build`, and `cargo test` on push/PR to `master`. `RUSTFLAGS: -Aunexpected_cfgs` is set at workflow level to tolerate pre-existing cfg warnings. A `concurrency` group cancels stale in-flight runs on the same ref.
+`Cargo.toml` has **no `[workspace]` table** — `evm-core` and `evm-runtime` are pulled in as path dependencies from the root crate, not as workspace members. As a result, `cargo build --all` / `cargo test --all` from the root only operate on the root crate; sub-crate dev-deps + unit tests don't run via the workspace. `cargo test -p evm-core` errors out (`cannot be tested because it requires dev-dependencies and is not a member of the workspace`).
+
+CI (`.github/workflows/ci.yml`) runs `cargo clippy`, `cargo build`, and `cargo test` on push/PR to `master`. `RUSTFLAGS: -Aunexpected_cfgs` is set at workflow level to tolerate pre-existing cfg warnings from the `fixed-hash` / `uint` macros (which emit unknown cfgs like `dev` that the crate-level `#![deny(warnings)]` would otherwise reject). A `concurrency` group cancels stale in-flight runs on the same ref. The `build-and-test` job uses `Swatinem/rust-cache@v2` and depends on `lint`.
 
 ## Lint Configuration
 
@@ -37,7 +39,7 @@ Three crates in a layered architecture (the upstream `evm-gasometer` crate has b
 - `Machine` struct: stack, memory, program counter, bytecode execution
 - `Opcode`: all EVM opcode definitions (`opcode.rs`)
 - `ExitReason`: execution termination types (Succeed, Error, Revert, Fatal, StepLimitReached)
-- `eval/` subdirectory: opcode evaluation split into `arithmetic.rs`, `bitwise.rs`, `misc.rs`
+- `eval/` subdirectory: opcode evaluation split into `arithmetic.rs`, `bitwise.rs`, `misc.rs` (plus `macros.rs` for shared dispatch macros and `mod.rs` for the eval entry point)
 - Primitive types (`H160`, `H256`, `U256`) defined via `fixed-hash` and `uint` macros in `primitive_types.rs`
 
 **evm-runtime** (`runtime/src/`) — Execution interface connecting the machine to external state.
@@ -86,7 +88,7 @@ Key changes from upstream SputnikVM:
 - After any change, run `cargo test` here, then verify `rome-evm-private` builds against the local checkout (`../evm` path dependency).
 - The SELFDESTRUCT opcode is disabled — do not re-enable.
 - Handler trait modifications affect all EVM execution paths.
-- No tests are defined in this crate (`cargo test` returns 0 tests); real opcode coverage lives in `rome-evm-private/tests/`.
+- `cargo test` from the root returns 0 tests. A single inline unit test exists in `core/src/valids.rs` but doesn't run because `evm-core` is a path dep, not a workspace member. Real opcode + integration coverage lives in `rome-evm-private/tests/` and the `tests/` integration repo.
 
 ## Change Impact Map
 
