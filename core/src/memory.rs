@@ -82,6 +82,14 @@ impl Memory {
 			}
 		};
 
+		// Cap memory growth at the configured limit. SputnikVM historically
+		// bounded expansion via the gasometer (removed PR #11); without it an
+		// unbounded expansion/return (e.g. an ERC165 "return bomb") overruns the
+		// embedder's heap. Error like Ethereum's out-of-gas on memory expansion.
+		if end > self.limit {
+			return Err(ExitError::OutOfGas)
+		}
+
 		self.effective_len = max(self.effective_len, end);
 		Ok(())
 	}
@@ -175,5 +183,35 @@ impl Memory {
 		});
 
 		self.set(memory_offset, data_by_offset, Some(len))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	// Regression guard: memory growth must honour `Memory::limit`. The gasometer
+	// that historically bounded expansion was removed (PR #11), leaving
+	// `resize_end` unbounded — a contract expanding/returning more than the limit
+	// (e.g. an ERC165 "return bomb") overran the embedder's heap instead of
+	// reverting. Growth past the limit must error like Ethereum's OOG.
+	#[test]
+	fn resize_end_rejects_growth_beyond_limit() {
+		let mut mem = Memory::new(1024);
+		assert!(mem.resize_end(512).is_ok(), "within limit must succeed");
+		assert!(mem.resize_end(1024).is_ok(), "at limit must succeed");
+		assert!(
+			matches!(mem.resize_end(2048), Err(ExitError::OutOfGas)),
+			"growth beyond limit must error"
+		);
+	}
+
+	#[test]
+	fn resize_offset_rejects_beyond_limit() {
+		let mut mem = Memory::new(1024);
+		assert!(
+			matches!(mem.resize_offset(1024, 1024), Err(ExitError::OutOfGas)),
+			"offset+len beyond limit must error"
+		);
 	}
 }
