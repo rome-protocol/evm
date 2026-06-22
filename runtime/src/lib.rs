@@ -232,7 +232,7 @@ impl Config {
 			create_increase_nonce: true,
 			call_l64_after_gas: true,
 			stack_limit: 1024,
-			memory_limit: 128 * 1024, // cap EVM memory under Solana's 256 KiB heap; over-large expansion OOGs via resize_end (was usize::MAX since gasometer removal, PR #11)
+			memory_limit: 160 * 1024, // cap EVM memory under Solana's 256 KiB heap (leaves ~96 KiB for VM state + return copy); over-large expansion OOGs via resize_end (was usize::MAX since gasometer removal, PR #11)
 			call_stack_limit: 1024,
 			create_contract_limit: Some(0x6000),
 			call_stipend: 2300,
