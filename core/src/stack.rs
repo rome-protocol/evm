@@ -63,9 +63,11 @@ pub struct Stack {
 impl Stack {
 	/// Create a new stack with given limit.
 	#[must_use]
-	pub const fn new(limit: usize) -> Self {
+	pub fn new(limit: usize) -> Self {
 		Self {
-			data: Vec::new(),
+			// Modest reserve: kill geometric realloc-copy on the hot PUSH path
+			// (PUSH ≈ 28% of swap CU) without the full-limit (32KB/frame) heap blowup.
+			data: Vec::with_capacity(64),
 			limit,
 		}
 	}
