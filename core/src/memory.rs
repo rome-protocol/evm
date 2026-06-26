@@ -18,9 +18,10 @@ pub struct Memory {
 impl Memory {
 	/// Create a new memory with the given limit.
 	#[must_use]
-	pub const fn new(limit: usize) -> Self {
+	pub fn new(limit: usize) -> Self {
 		Self {
-			data: Vec::new(),
+			// Modest reserve: cut realloc-copy as memory grows via `set()` resize.
+			data: Vec::with_capacity(1024),
 			effective_len: 0_usize,
 			limit,
 		}
@@ -107,6 +108,23 @@ impl Memory {
 
 		(&mut ret[0..(end - offset)]).copy_from_slice(&self.data[offset..end]);
 
+		ret
+	}
+
+	/// Read a 32-byte word at `offset` directly into an `H256`, no heap Vec.
+	/// Behaviour-identical to `H256::from_slice(&self.get(offset, 32))` (zero-pad
+	/// out of range / past data) — avoids the per-MLOAD `vec![0; 32]` allocation.
+	#[must_use]
+	pub fn load_h256(&self, offset: usize) -> crate::H256 {
+		let mut ret = crate::H256::default();
+		if offset >= self.data.len() {
+			return ret;
+		}
+		if offset.checked_add(32).map_or(true, |pos| pos > self.limit) {
+			return ret;
+		}
+		let end = min(offset + 32, self.data.len());
+		ret[0..(end - offset)].copy_from_slice(&self.data[offset..end]);
 		ret
 	}
 
