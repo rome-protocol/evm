@@ -71,6 +71,7 @@ Key changes from upstream SputnikVM:
 - SPL-related modifications including `TransferProhibited` error variant (PR #9)
 - Removed unused backend/gasometer crates (PR #11)
 - Dropped unused `sha3` dep (PR #25) — SHA3 opcode goes through `Handler::keccak256_h256`
+- Per-opcode allocation overhead eliminated (PR #29) — `Stack::new` pre-reserves 64 slots, `Memory::new` pre-reserves 1 KiB, and `Memory::load_h256(offset)` reads a 32-byte word directly into an `H256` (no per-MLOAD `vec![0; 32]` heap alloc). Behaviour-preserving — `load_h256` is bit-identical to the prior `H256::from_slice(&get(offset, 32))` (verified by the differential test at `core/tests/load_h256.rs`); the two `with_capacity` hints are capacity-only and the Borsh-serialized form is byte-identical. Measured on a Uniswap V3 single-hop swap in the Solana SVM: −33,808 compute units (−2.54%), −23,552 peak heap (−14.5%), bit-identical output.
 
 ## Dependency Management
 
@@ -86,7 +87,7 @@ Key changes from upstream SputnikVM:
 - After any change, run `cargo test` here, then verify `rome-evm-private` builds against the local checkout (`../evm` path dependency).
 - The SELFDESTRUCT opcode is disabled — do not re-enable.
 - Handler trait modifications affect all EVM execution paths.
-- No tests are defined in this crate (`cargo test` returns 0 tests); real opcode coverage lives in `rome-evm-private/tests/`.
+- One integration test lives here (`core/tests/load_h256.rs`, the MLOAD differential added in PR #29); broad opcode coverage still lives in `rome-evm-private/tests/`.
 
 ## Change Impact Map
 
