@@ -232,7 +232,10 @@ impl Config {
 			create_increase_nonce: true,
 			call_l64_after_gas: true,
 			stack_limit: 1024,
-			memory_limit: usize::max_value(),
+			// Finite bound so off-chain emulation can't be driven to a host OOM by a
+			// single memory op at a huge offset (the Vec::resize in Memory::set). 64 MiB
+			// is far above any gas-affordable EVM memory; on-chain the SBF heap binds first.
+			memory_limit: 64 * 1024 * 1024,
 			call_stack_limit: 1024,
 			create_contract_limit: Some(0x6000),
 			call_stipend: 2300,
