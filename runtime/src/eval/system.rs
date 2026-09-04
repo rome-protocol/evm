@@ -1,6 +1,6 @@
 use core::cmp::min;
 use alloc::vec::Vec;
-use crate::{Runtime, ExitError, Handler, Capture, Transfer, ExitReason, CreateScheme, CallScheme, Context, ExitSucceed, ExitFatal, H160, H256, U256};
+use crate::{Runtime, ExitError, Handler, Capture, Transfer, ExitReason, CreateScheme, CallScheme, Context, ExitSucceed, H160, H256, U256};
 use super::Control;
 
 /// Compute Keccak-256 hash
@@ -116,15 +116,18 @@ pub fn extcodecopy<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H>
 	pop_u256!(runtime, memory_offset, code_offset, len);
 
 	let memory_offset = as_usize_or_fail!(memory_offset);
-	let code_offset = as_usize_or_fail!(code_offset);
 	let len = as_usize_or_fail!(len);
+	let code = handler.code(address.into());
+	// Clamp before narrowing, not after: an out-of-range source offset must
+	// zero-fill (spec), not fail converting to usize.
+	let code_offset = min(code_offset, U256::from(code.len())).as_usize();
 
 	try_or_fail!(runtime.machine.memory_mut().resize_offset(memory_offset, len));
 	match runtime.machine.memory_mut().copy_large(
 		memory_offset,
 		code_offset,
 		len,
-		&handler.code(address.into())
+		&code
 	) {
 		Ok(()) => (),
 		Err(e) => return Control::Exit(e.into()),
@@ -146,17 +149,20 @@ pub fn returndatacopy<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 	pop_u256!(runtime, memory_offset, data_offset, len);
 
 	let memory_offset = as_usize_or_fail!(memory_offset);
-	let data_offset = as_usize_or_fail!(data_offset);
 	let len = as_usize_or_fail!(len);
 
-	try_or_fail!(runtime.machine.memory_mut().resize_offset(memory_offset, len));
-	if data_offset.checked_add(len)
-		.map(|l| l > runtime.return_data_buffer.len())
-		.unwrap_or(true)
+	// Bounds-check in U256 domain before narrowing data_offset: unlike the
+	// zero-fill *COPYs, RETURNDATACOPY's spec is an explicit OutOfOffset for
+	// a source range past return_data_buffer's real length, so an offset
+	// above usize::MAX must land here, not in as_usize_or_fail!'s own class.
+	if data_offset.checked_add(U256::from(len))
+		.map_or(true, |end| end > U256::from(runtime.return_data_buffer.len()))
 	{
 		return Control::Exit(ExitError::OutOfOffset.into())
 	}
+	let data_offset = data_offset.as_usize(); // safe: bounded above by return_data_buffer.len(), a usize
 
+	try_or_fail!(runtime.machine.memory_mut().resize_offset(memory_offset, len));
 	match runtime.machine.memory_mut().copy_large(memory_offset, data_offset, len, &runtime.return_data_buffer) {
 		Ok(()) => Control::Continue,
 		Err(e) => Control::Exit(e.into()),

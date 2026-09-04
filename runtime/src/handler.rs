@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use crate::{Capture, Stack, ExitError, Opcode,
 			Machine, ExitReason,
 			H160, H256, U256};
-use evm_core::{Context, CreateScheme, ExitFatal, Transfer};
+use evm_core::{Context, CreateScheme, Transfer};
 
 /// EVM context handler.
 pub trait Handler {
@@ -103,10 +103,13 @@ pub trait Handler {
 		opcode: Opcode,
 		stack: &Stack
 	) -> Result<(), ExitError>;
-	/// Handle other unknown external opcodes.
+	/// Handle other unknown external opcodes. Frame-local: an undefined
+	/// opcode (or the disabled SELFDESTRUCT) must fail only the frame that
+	/// hit it, the same as every other `ExitError` path in this trait —
+	/// not `ExitFatal`, which the caller cannot recover from.
 	fn other(
 		&mut self,
 		_opcode: Opcode,
 		_stack: &mut Machine
-	) -> Result<(), ExitFatal>;
+	) -> Result<(), ExitError>;
 }

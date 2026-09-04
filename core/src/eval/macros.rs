@@ -139,8 +139,12 @@ macro_rules! op3_u256_fn {
 macro_rules! as_usize_or_fail {
 	( $v:expr ) => {
 		{
+			// Frame-local, not ExitFatal: an operand too large to represent as
+			// a memory offset is the same class of failure a gasometer would
+			// have produced for an unaffordable expansion (OutOfGas), and the
+			// caller can recover from it like any other ExitError.
 			if $v > U256::from(usize::max_value()) {
-				return Control::Exit(ExitFatal::NotSupported.into())
+				return Control::Exit(ExitError::OutOfGas.into())
 			}
 
 			$v.as_usize()
