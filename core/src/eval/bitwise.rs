@@ -43,10 +43,14 @@ pub fn not(op1: U256) -> U256 {
 
 /// Retrieve single byte from word
 pub fn byte(op1: U256, op2: U256) -> U256 {
-	let i = op1.as_usize();
-	if i >= 32 {
+	// Bound in U256 domain first: op1 can be any 256-bit value, and
+	// `.as_usize()` panics above usize::MAX, so the >=32 check must run
+	// before narrowing, not after (matches shl/shr/sar's `shift >= 256` guard
+	// above, done the same way).
+	if op1 >= U256::from(32) {
 		U256::zero()
 	} else {
+		let i = op1.as_usize();
 		let mut buf = [0u8; 32];
 		op2.to_big_endian(&mut buf);
 		U256::from(buf[i])
@@ -93,5 +97,27 @@ pub fn sar(shift: U256, value: U256) -> U256 {
 				I256(Sign::Minus, shifted).into()
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	// FIND-011: `op1.as_usize()` panics ("Integer overflow when casting to
+	// usize") for any op1 > usize::MAX. The `i >= 32` bound check ran only
+	// *after* that conversion, so a byte index above usize::MAX panicked the
+	// whole interpreter instead of returning zero like any other out-of-range
+	// index.
+	#[test]
+	fn byte_with_index_above_usize_max_returns_zero_not_panic() {
+		assert_eq!(byte(U256::max_value(), U256::max_value()), U256::zero());
+	}
+
+	#[test]
+	fn byte_in_range_unaffected() {
+		let value = U256::from(0x0102_0304_u64);
+		assert_eq!(byte(U256::from(28), value), U256::from(0x01));
+		assert_eq!(byte(U256::from(31), value), U256::from(0x04));
 	}
 }
