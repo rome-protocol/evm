@@ -104,7 +104,7 @@ pub fn sar(shift: U256, value: U256) -> U256 {
 mod tests {
 	use super::*;
 
-	// FIND-011: `op1.as_usize()` panics ("Integer overflow when casting to
+	// `op1.as_usize()` panics ("Integer overflow when casting to
 	// usize") for any op1 > usize::MAX. The `i >= 32` bound check ran only
 	// *after* that conversion, so a byte index above usize::MAX panicked the
 	// whole interpreter instead of returning zero like any other out-of-range

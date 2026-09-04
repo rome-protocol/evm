@@ -82,6 +82,9 @@ impl Div for I256 {
 			return I256::zero();
 		}
 
+		// The spec's explicit overflow case. Redundant with the general path
+		// below (MIN/-1 yields magnitude 2^255, which round-trips to MIN), kept
+		// because the spec states it outright.
 		if self == I256::min_value() && other == I256(Sign::Minus, U256::from(1_u64)) {
 			return I256::min_value();
 		}
@@ -130,7 +133,7 @@ mod tests {
 	// Mirrors `eval::arithmetic::sdiv`/`srem` (the opcode-level wrappers), which
 	// guard division-by-zero before ever reaching `I256`. `Div` already carries
 	// its own zero check (`other == I256::zero()` at the top); `Rem` does not
-	// (a pre-existing, out-of-scope gap — FIND-009 is the Div mask only), so
+	// (a pre-existing, out-of-scope gap — the finding is the Div mask only), so
 	// the b==0 guard here is required to avoid hitting it.
 	fn sdiv(a: U256, b: U256) -> U256 {
 		if b.is_zero() { U256::zero() } else { (I256::from(a) / I256::from(b)).into() }

@@ -10,7 +10,8 @@ Rome Protocol's fork of SputnikVM — a portable, stateless Ethereum Virtual Mac
 
 ```bash
 cargo build --release --all    # Build all crates
-cargo test                     # Run all tests (none currently defined)
+cargo test                     # `evm` package only — does NOT reach core/
+cargo test -p evm-core --features with-serde   # core/: needs the feature to link
 cargo clippy                   # Lint (matches CI)
 cargo fmt                      # Format
 cargo fmt -- --check           # Check formatting without modifying

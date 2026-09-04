@@ -1,4 +1,4 @@
-//! FIND-013 / FIND-010(3) / FIND-015(d): `call()` must validate the CALL's
+//! `call()` must validate the CALL's
 //! stack operands (including out_offset/out_len) *before* dispatching to
 //! `Handler::call`, not after the callee has already run. A too-short CALL
 //! (missing out_offset/out_len) or an out-of-range out_offset must fail the
@@ -91,7 +91,7 @@ fn context() -> Context {
 	}
 }
 
-/// FIND-013: only 5 of the 7 CALL operands are on the stack (out_offset and
+///only 5 of the 7 CALL operands are on the stack (out_offset and
 /// out_len were never pushed). The callee must not run before the missing
 /// operands are discovered.
 #[test]
@@ -115,7 +115,7 @@ fn call_with_too_few_operands_does_not_dispatch() {
 	}
 }
 
-/// FIND-010(3) / FIND-015(d): a full 7-operand CALL whose out_offset is past
+///a full 7-operand CALL whose out_offset is past
 /// the memory limit must fail the caller's own frame *before* the callee
 /// runs (today it dispatches, then fails only when save_return_value reads
 /// out_offset/out_len after the callee has already returned).

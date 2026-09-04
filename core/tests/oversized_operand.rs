@@ -1,4 +1,4 @@
-//! FIND-015(b)/(c): an operand above `usize::MAX` used to construct
+//! the finding/(c): an operand above `usize::MAX` used to construct
 //! `ExitFatal::NotSupported` (whole-transaction death downstream). A memory
 //! operand (MSTORE) should instead be a frame-local `ExitError::OutOfGas`;
 //! an unpriced *COPY source offset (CODECOPY/CALLDATACOPY) should clamp and

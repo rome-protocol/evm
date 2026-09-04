@@ -1,4 +1,4 @@
-//! FIND-015(c), runtime-crate half: EXTCODECOPY and RETURNDATACOPY narrow
+//! the finding, runtime-crate half: EXTCODECOPY and RETURNDATACOPY narrow
 //! their source offset via `as_usize_or_fail!` before bounding it, so an
 //! offset above `usize::MAX` hit the macro's Fatal path instead of the
 //! spec's own behaviour (zero-fill for EXTCODECOPY, OutOfOffset for

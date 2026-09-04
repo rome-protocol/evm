@@ -377,7 +377,7 @@ pub fn call<'config, H: Handler>(
 	// call can resume later and still find them. But validating them only
 	// there means a too-short CALL (stack underflow) or an out-of-range
 	// out_offset would only be discovered *after* handler.call() already ran
-	// the sub-call's side effects (FIND-013 / FIND-010 / FIND-015). Peek and
+	// the sub-call's side effects. Peek and
 	// validate now, before dispatch; the identical peek in save_return_value
 	// then always succeeds on an already-validated range.
 	let out_offset = try_or_fail!(runtime.machine.stack().peek(0));

@@ -152,6 +152,10 @@ impl Memory {
 			return Ok(())
 		}
 
+		// Unreachable from the interpreter: every caller resizes through
+		// `resize_end` first, which rejects a breach as a frame-local OutOfGas.
+		// Kept as a backstop for a direct caller that does not, so do not read
+		// this ExitFatal as the error class for a memory-limit breach.
 		if offset.checked_add(target_size).map_or(true, |pos| pos > self.limit)
 		{
 			return Err(ExitFatal::NotSupported)
@@ -221,7 +225,7 @@ mod tests {
 		);
 	}
 
-	// FIND-010: a zero-length write is a no-op per spec regardless of offset (a
+	//a zero-length write is a no-op per spec regardless of offset (a
 	// zero-length CODECOPY/CALLDATACOPY/MCOPY at a huge out-of-range offset must
 	// succeed, matching Ethereum, not fail as if it actually wrote something).
 	#[test]

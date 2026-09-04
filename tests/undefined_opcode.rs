@@ -1,4 +1,4 @@
-//! FIND-015(a): `Handler::other()` returns `Result<(), ExitFatal>`, so an
+//! `Handler::other()` returns `Result<(), ExitFatal>`, so an
 //! implementor has no way to signal "this callee failed" the way every other
 //! trait method (frame-local `ExitError`) can. The trait's only implementor
 //! (rome-evm-private program/src/state/handler.rs) therefore reports
