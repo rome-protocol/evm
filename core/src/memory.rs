@@ -146,6 +146,12 @@ impl Memory {
 	) -> Result<(), ExitFatal> {
 		let target_size = target_size.unwrap_or(value.len());
 
+		// Spec no-op regardless of offset (a zero-length copy at any offset,
+		// including past the limit, must succeed as on Ethereum).
+		if target_size == 0 {
+			return Ok(())
+		}
+
 		if offset.checked_add(target_size).map_or(true, |pos| pos > self.limit)
 		{
 			return Err(ExitFatal::NotSupported)
@@ -213,5 +219,16 @@ mod tests {
 			matches!(mem.resize_offset(1024, 1024), Err(ExitError::OutOfGas)),
 			"offset+len beyond limit must error"
 		);
+	}
+
+	// FIND-010: a zero-length write is a no-op per spec regardless of offset (a
+	// zero-length CODECOPY/CALLDATACOPY/MCOPY at a huge out-of-range offset must
+	// succeed, matching Ethereum, not fail as if it actually wrote something).
+	#[test]
+	fn set_zero_length_at_huge_offset_is_noop() {
+		let mut mem = Memory::new(1024);
+		let len_before = mem.len();
+		assert_eq!(mem.set(usize::MAX - 1, &[], Some(0)), Ok(()));
+		assert_eq!(mem.len(), len_before, "zero-length write must not grow memory");
 	}
 }
