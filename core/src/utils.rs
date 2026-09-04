@@ -86,7 +86,12 @@ impl Div for I256 {
 			return I256::min_value();
 		}
 
-		let d = (self.1 / other.1) & SIGN_BIT_MASK;
+		// Magnitudes are bounded: self.1/other.1 <= 2^255, with equality only at
+		// MIN/+-1 (both already handled above/below this line). Masking bit 255
+		// here collapsed that single legal quotient to zero (SDIV(MIN,1) -> 0
+		// instead of MIN) — the mask served no other case, so it is removed
+		// rather than special-cased further.
+		let d = self.1 / other.1;
 
 		if d == U256::zero() {
 			return I256::zero();
@@ -113,5 +118,96 @@ impl Rem for I256 {
 		}
 
 		I256(self.0, r)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn min_u256() -> U256 { U256::one() << 255 }
+
+	// Mirrors `eval::arithmetic::sdiv`/`srem` (the opcode-level wrappers), which
+	// guard division-by-zero before ever reaching `I256`. `Div` already carries
+	// its own zero check (`other == I256::zero()` at the top); `Rem` does not
+	// (a pre-existing, out-of-scope gap — FIND-009 is the Div mask only), so
+	// the b==0 guard here is required to avoid hitting it.
+	fn sdiv(a: U256, b: U256) -> U256 {
+		if b.is_zero() { U256::zero() } else { (I256::from(a) / I256::from(b)).into() }
+	}
+	fn srem(a: U256, b: U256) -> U256 {
+		if b.is_zero() { U256::zero() } else { (I256::from(a) % I256::from(b)).into() }
+	}
+
+	#[test]
+	fn sdiv_min_by_one_is_min() {
+		// Regression: `& SIGN_BIT_MASK` on the quotient collapses the one legal
+		// magnitude of exactly 2^255 (MIN/+-1) to zero.
+		assert_eq!(sdiv(min_u256(), U256::one()), min_u256());
+	}
+
+	#[test]
+	fn sdiv_min_by_minus_one_is_min() {
+		assert_eq!(sdiv(min_u256(), U256::max_value()), min_u256());
+	}
+
+	#[test]
+	fn sdiv_min_by_two_is_minus_two_pow_254() {
+		let expected: U256 = I256(Sign::Minus, U256::one() << 254).into();
+		assert_eq!(sdiv(min_u256(), U256::from(2)), expected);
+	}
+
+	#[test]
+	fn smod_min_by_minus_one_is_zero() {
+		assert_eq!(srem(min_u256(), U256::max_value()), U256::zero());
+	}
+
+	fn from_i128(v: i128) -> U256 {
+		if v >= 0 {
+			U256::from(v as u128)
+		} else {
+			let mag = U256::from(v.unsigned_abs());
+			(!mag).overflowing_add(U256::one()).0
+		}
+	}
+
+	// i128::MIN / -1 overflows i128 (magnitude 2^127 doesn't fit back into i128)
+	// but is a perfectly ordinary division in 256-bit space (int256 range dwarfs
+	// i128), so the wide-space reference is computed directly in U256 rather
+	// than routed back through i128.
+	fn ref_sdiv_wide(a: i128, b: i128) -> U256 {
+		if b == 0 {
+			return U256::zero();
+		}
+		if a == i128::MIN && b == -1 {
+			return U256::from(i128::MIN.unsigned_abs());
+		}
+		from_i128(a / b)
+	}
+
+	fn ref_srem_wide(a: i128, b: i128) -> U256 {
+		if b == 0 || (a == i128::MIN && b == -1) {
+			return U256::zero();
+		}
+		from_i128(a % b)
+	}
+
+	#[test]
+	fn sdiv_srem_sweep_matches_i128_reference() {
+		let values: [i128; 12] = [
+			i128::MIN, i128::MIN + 1, -1_000_000, -7, -2, -1, 0, 1, 2, 7, 1_000_000, i128::MAX,
+		];
+
+		for &a in &values {
+			for &b in &values {
+				let got_div = sdiv(from_i128(a), from_i128(b));
+				let want_div = ref_sdiv_wide(a, b);
+				assert_eq!(got_div, want_div, "SDIV({a}, {b})");
+
+				let got_rem = srem(from_i128(a), from_i128(b));
+				let want_rem = ref_srem_wide(a, b);
+				assert_eq!(got_rem, want_rem, "SMOD({a}, {b})");
+			}
+		}
 	}
 }
