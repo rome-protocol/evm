@@ -1,15 +1,7 @@
-//! `Handler::other()` returns `Result<(), ExitFatal>`, so an
-//! implementor has no way to signal "this callee failed" the way every other
-//! trait method (frame-local `ExitError`) can. The trait's only implementor
-//! (rome-evm-private program/src/state/handler.rs) therefore reports
-//! undefined opcodes and the disabled SELFDESTRUCT as `ExitFatal`, which
-//! kills the whole transaction instead of just the frame that hit them.
-//!
-//! This stub targets the FIXED signature (`Result<(), ExitError>`) directly:
-//! it will not compile against the current trait, which is the RED for a
-//! signature change (a compile-time failure is the honest RED here, not a
-//! runtime one — there is no way to make the old signature produce the new
-//! behaviour). Run: `RUSTFLAGS=-Aunexpected_cfgs cargo test --test undefined_opcode`.
+//! `Handler::other()` is frame-local: an undefined opcode (or the disabled
+//! SELFDESTRUCT) fails only the frame that executes it, the same as INVALID, so
+//! a caller observes a failed sub-call instead of losing its whole transaction.
+//! Run: `RUSTFLAGS=-Aunexpected_cfgs cargo test --test undefined_opcode`.
 
 use evm::{
 	Capture, Context, CreateScheme, ExitError, ExitReason, H160, H256, Handler, Machine, Opcode,
@@ -70,8 +62,7 @@ impl Handler for StubHandler {
 	}
 	fn pre_validate(&mut self, _context: &Context, _opcode: Opcode, _stack: &Stack) -> Result<(), ExitError> { Ok(()) }
 
-	// The fixed shape: mirrors rome-evm-private's post-fix handler — log and
-	// return the frame-local DesignatedInvalid, not a whole-tx Fatal.
+	// The frame-local class a production implementor returns for this path.
 	fn other(&mut self, _opcode: Opcode, _stack: &mut Machine) -> Result<(), ExitError> {
 		Err(ExitError::DesignatedInvalid)
 	}
