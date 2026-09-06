@@ -1,6 +1,6 @@
 use core::cmp::{min, max};
 use super::Control;
-use crate::{Machine, ExitError, ExitSucceed, ExitFatal, ExitRevert, H256, U256};
+use crate::{Machine, ExitError, ExitSucceed, ExitRevert, H256, U256};
 
 /// Get size of code running in current environment
 pub fn codesize(state: &mut Machine) -> Control {
@@ -14,7 +14,9 @@ pub fn codecopy(state: &mut Machine) -> Control {
 	pop_u256!(state, memory_offset, code_offset, len);
 
 	let memory_offset = as_usize_or_fail!(memory_offset);
-	let code_offset = as_usize_or_fail!(code_offset);
+	// Clamp before narrowing, not after: an out-of-range source offset must
+	// zero-fill (spec), not fail converting to usize.
+	let code_offset = min(code_offset, U256::from(state.code.len())).as_usize();
 	let len = as_usize_or_fail!(len);
 
 	try_or_fail!(state.memory.resize_offset(memory_offset, len));
@@ -52,7 +54,8 @@ pub fn calldatacopy(state: &mut Machine) -> Control {
 	pop_u256!(state, memory_offset, data_offset, len);
 
 	let memory_offset = as_usize_or_fail!(memory_offset);
-	let data_offset = as_usize_or_fail!(data_offset);
+	// Clamp before narrowing, not after: see codecopy above.
+	let data_offset = min(data_offset, U256::from(state.data.len())).as_usize();
 	let len = as_usize_or_fail!(len);
 
 	if len == 0 {

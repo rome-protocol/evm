@@ -87,7 +87,9 @@ pub fn exp(op1: U256, op2: U256) -> U256 {
 
 /// Extend length of two’s complement signed integer
 pub fn signextend(op1: U256, op2: U256) -> U256 {
-	if op1 >= U256::from(32) {
+	// Byte 31 spans the whole word, so the result is op2; building its mask
+	// would underflow `(1 << 256) - 1`.
+	if op1 >= U256::from(31) {
 		op2
 	} else {
 		let byte_index = op1.as_usize();
@@ -102,5 +104,29 @@ pub fn signextend(op1: U256, op2: U256) -> U256 {
 			let mask = (U256::one() << (bit_index + 1)) - 1;
 			op2 & mask
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn signextend_at_byte_31_with_sign_bit_clear_is_identity_not_panic() {
+		assert_eq!(signextend(U256::from(31), U256::from(5)), U256::from(5));
+	}
+
+	#[test]
+	fn signextend_at_byte_31_with_sign_bit_set_is_identity() {
+		let value = (U256::one() << 255) | U256::from(7);
+		assert_eq!(signextend(U256::from(31), value), value);
+	}
+
+	#[test]
+	fn signextend_in_range_unaffected() {
+		assert_eq!(signextend(U256::from(30), U256::from(5)), U256::from(5));
+		assert_eq!(signextend(U256::zero(), U256::from(0xff)), U256::MAX);
+		assert_eq!(signextend(U256::zero(), U256::from(0x7f)), U256::from(0x7f));
+		assert_eq!(signextend(U256::from(32), U256::from(5)), U256::from(5));
 	}
 }

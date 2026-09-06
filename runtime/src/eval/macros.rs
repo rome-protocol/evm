@@ -61,8 +61,10 @@ macro_rules! push_u256 {
 macro_rules! as_usize_or_fail {
 	( $v:expr ) => {
 		{
+			// Frame-local, not ExitFatal: see core/src/eval/macros.rs (same fix,
+			// duplicated copy of this macro).
 			if $v > U256::from(usize::max_value()) {
-				return Control::Exit(ExitFatal::NotSupported.into())
+				return Control::Exit(ExitError::OutOfGas.into())
 			}
 
 			$v.as_usize()

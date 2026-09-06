@@ -1,6 +1,6 @@
 use core::cmp::min;
 use alloc::vec::Vec;
-use crate::{Runtime, ExitError, Handler, Capture, Transfer, ExitReason, CreateScheme, CallScheme, Context, ExitSucceed, ExitFatal, H160, H256, U256};
+use crate::{Runtime, ExitError, Handler, Capture, Transfer, ExitReason, CreateScheme, CallScheme, Context, ExitSucceed, H160, H256, U256};
 use super::Control;
 
 /// Compute Keccak-256 hash
@@ -116,15 +116,18 @@ pub fn extcodecopy<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H>
 	pop_u256!(runtime, memory_offset, code_offset, len);
 
 	let memory_offset = as_usize_or_fail!(memory_offset);
-	let code_offset = as_usize_or_fail!(code_offset);
 	let len = as_usize_or_fail!(len);
+	let code = handler.code(address.into());
+	// Clamp before narrowing, not after: an out-of-range source offset must
+	// zero-fill (spec), not fail converting to usize.
+	let code_offset = min(code_offset, U256::from(code.len())).as_usize();
 
 	try_or_fail!(runtime.machine.memory_mut().resize_offset(memory_offset, len));
 	match runtime.machine.memory_mut().copy_large(
 		memory_offset,
 		code_offset,
 		len,
-		&handler.code(address.into())
+		&code
 	) {
 		Ok(()) => (),
 		Err(e) => return Control::Exit(e.into()),
@@ -146,17 +149,20 @@ pub fn returndatacopy<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 	pop_u256!(runtime, memory_offset, data_offset, len);
 
 	let memory_offset = as_usize_or_fail!(memory_offset);
-	let data_offset = as_usize_or_fail!(data_offset);
 	let len = as_usize_or_fail!(len);
 
-	try_or_fail!(runtime.machine.memory_mut().resize_offset(memory_offset, len));
-	if data_offset.checked_add(len)
-		.map(|l| l > runtime.return_data_buffer.len())
-		.unwrap_or(true)
+	// Bounds-check in U256 domain before narrowing data_offset: unlike the
+	// zero-fill *COPYs, RETURNDATACOPY's spec is an explicit OutOfOffset for
+	// a source range past return_data_buffer's real length, so an offset
+	// above usize::MAX must land here, not in as_usize_or_fail!'s own class.
+	if data_offset.checked_add(U256::from(len))
+		.map_or(true, |end| end > U256::from(runtime.return_data_buffer.len()))
 	{
 		return Control::Exit(ExitError::OutOfOffset.into())
 	}
+	let data_offset = data_offset.as_usize(); // safe: bounded above by return_data_buffer.len(), a usize
 
+	try_or_fail!(runtime.machine.memory_mut().resize_offset(memory_offset, len));
 	match runtime.machine.memory_mut().copy_large(memory_offset, data_offset, len, &runtime.return_data_buffer) {
 		Ok(()) => Control::Continue,
 		Err(e) => Control::Exit(e.into()),
@@ -360,13 +366,25 @@ pub fn call<'config, H: Handler>(
 		},
 	};
 
-	// out_offset and out_len parameters will be read in save_return_value()
-	pop_u256!(runtime, in_offset, in_len/*, out_offset, out_len*/);
+	pop_u256!(runtime, in_offset, in_len);
 	let in_offset = as_usize_or_fail!(in_offset);
 	let in_len = as_usize_or_fail!(in_len);
-	
+
 	try_or_fail!(runtime.machine.memory_mut().resize_offset(in_offset, in_len));
-	// try_or_fail!(runtime.machine.memory_mut().resize_offset(out_offset, out_len));
+
+	// out_offset/out_len stay on the stack (read again in save_return_value,
+	// after the callee returns) rather than being popped here, so a trapped
+	// call can resume later and still find them. But validating them only
+	// there means a too-short CALL (stack underflow) or an out-of-range
+	// out_offset would only be discovered *after* handler.call() already ran
+	// the sub-call's side effects. Peek and
+	// validate now, before dispatch; the identical peek in save_return_value
+	// then always succeeds on an already-validated range.
+	let out_offset = try_or_fail!(runtime.machine.stack().peek(0));
+	let out_len = try_or_fail!(runtime.machine.stack().peek(1));
+	let out_offset = as_usize_or_fail!(out_offset);
+	let out_len = as_usize_or_fail!(out_len);
+	try_or_fail!(runtime.machine.memory_mut().resize_offset(out_offset, out_len));
 
 	let input = if in_len == 0 {
 		Vec::new()

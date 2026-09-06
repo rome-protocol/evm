@@ -31,4 +31,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build
+      # Root `cargo test` covers the `evm` package only. The core crate's tests
+      # need its serde feature to link, so without this line every test under
+      # core/ is silently skipped rather than reported as failing.
       - run: cargo test
+      - run: cargo test --manifest-path core/Cargo.toml --features with-serde

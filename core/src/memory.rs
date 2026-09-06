@@ -82,6 +82,14 @@ impl Memory {
 			}
 		};
 
+		// Cap memory growth at the configured limit. SputnikVM historically
+		// bounded expansion via the gasometer (removed PR #11); without it an
+		// unbounded expansion/return (e.g. an ERC165 "return bomb") overruns the
+		// embedder's heap. Error like Ethereum's out-of-gas on memory expansion.
+		if end > self.limit {
+			return Err(ExitError::OutOfGas)
+		}
+
 		self.effective_len = max(self.effective_len, end);
 		Ok(())
 	}
@@ -138,6 +146,16 @@ impl Memory {
 	) -> Result<(), ExitFatal> {
 		let target_size = target_size.unwrap_or(value.len());
 
+		// Spec no-op regardless of offset (a zero-length copy at any offset,
+		// including past the limit, must succeed as on Ethereum).
+		if target_size == 0 {
+			return Ok(())
+		}
+
+		// Unreachable from the interpreter: every caller resizes through
+		// `resize_end` first, which rejects a breach as a frame-local OutOfGas.
+		// Kept as a backstop for a direct caller that does not, so do not read
+		// this ExitFatal as the error class for a memory-limit breach.
 		if offset.checked_add(target_size).map_or(true, |pos| pos > self.limit)
 		{
 			return Err(ExitFatal::NotSupported)
@@ -175,5 +193,46 @@ impl Memory {
 		});
 
 		self.set(memory_offset, data_by_offset, Some(len))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	// Regression guard: memory growth must honour `Memory::limit`. The gasometer
+	// that historically bounded expansion was removed (PR #11), leaving
+	// `resize_end` unbounded — a contract expanding/returning more than the limit
+	// (e.g. an ERC165 "return bomb") overran the embedder's heap instead of
+	// reverting. Growth past the limit must error like Ethereum's OOG.
+	#[test]
+	fn resize_end_rejects_growth_beyond_limit() {
+		let mut mem = Memory::new(1024);
+		assert!(mem.resize_end(512).is_ok(), "within limit must succeed");
+		assert!(mem.resize_end(1024).is_ok(), "at limit must succeed");
+		assert!(
+			matches!(mem.resize_end(2048), Err(ExitError::OutOfGas)),
+			"growth beyond limit must error"
+		);
+	}
+
+	#[test]
+	fn resize_offset_rejects_beyond_limit() {
+		let mut mem = Memory::new(1024);
+		assert!(
+			matches!(mem.resize_offset(1024, 1024), Err(ExitError::OutOfGas)),
+			"offset+len beyond limit must error"
+		);
+	}
+
+	//a zero-length write is a no-op per spec regardless of offset (a
+	// zero-length CODECOPY/CALLDATACOPY/MCOPY at a huge out-of-range offset must
+	// succeed, matching Ethereum, not fail as if it actually wrote something).
+	#[test]
+	fn set_zero_length_at_huge_offset_is_noop() {
+		let mut mem = Memory::new(1024);
+		let len_before = mem.len();
+		assert_eq!(mem.set(usize::MAX - 1, &[], Some(0)), Ok(()));
+		assert_eq!(mem.len(), len_before, "zero-length write must not grow memory");
 	}
 }
