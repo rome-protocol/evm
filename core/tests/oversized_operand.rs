@@ -76,3 +76,57 @@ fn calldatacopy_with_source_offset_above_usize_max_zero_fills() {
 	assert_eq!(capture, Capture::Exit(ExitReason::Succeed(ExitSucceed::Returned)));
 	assert_eq!(machine.return_value(), vec![0u8]);
 }
+
+// JUMPI: the destination operand is only meaningful on the TAKEN branch.
+// Ethereum ignores it entirely when the condition is zero, so bytecode may
+// carry any 256-bit value there. Converting `dest` to usize before looking at
+// the condition made an untaken branch with dest > usize::MAX exit
+// `InvalidJump` — a spec divergence that fails otherwise-valid contracts.
+
+#[test]
+fn jumpi_untaken_branch_ignores_destination_above_usize_max() {
+	let mut code = Vec::new();
+	push32(&mut code, U256::zero()); // condition = 0 → not taken
+	push32(&mut code, U256::max_value()); // dest, unrepresentable as usize
+	code.push(0x57); // JUMPI
+	push32(&mut code, U256::from(1)); // len
+	push32(&mut code, U256::zero()); // start
+	code.push(0xf3); // RETURN
+
+	let valids = Valids::compute(&code);
+	let mut machine = Machine::new(code, valids, Vec::new(), STACK_LIMIT, MEMORY_LIMIT);
+	let ok = |_, _: &_| Ok(());
+	let (_, capture) = machine.run(1000, ok, &zero_context());
+
+	assert_eq!(capture, Capture::Exit(ExitReason::Succeed(ExitSucceed::Returned)));
+}
+
+#[test]
+fn jumpi_taken_branch_with_destination_above_usize_max_is_invalid_jump() {
+	let mut code = Vec::new();
+	push32(&mut code, U256::from(1)); // condition ≠ 0 → taken
+	push32(&mut code, U256::max_value()); // dest, unrepresentable
+	code.push(0x57); // JUMPI
+
+	let valids = Valids::compute(&code);
+	let mut machine = Machine::new(code, valids, Vec::new(), STACK_LIMIT, MEMORY_LIMIT);
+	let ok = |_, _: &_| Ok(());
+	let (_, capture) = machine.run(1000, ok, &zero_context());
+
+	assert_eq!(capture, Capture::Exit(ExitReason::Error(ExitError::InvalidJump)));
+}
+
+#[test]
+fn jumpi_taken_branch_to_non_jumpdest_is_invalid_jump() {
+	let mut code = Vec::new();
+	push32(&mut code, U256::from(1)); // taken
+	push32(&mut code, U256::from(1)); // dest = 1: inside PUSH32 data, not a JUMPDEST
+	code.push(0x57); // JUMPI
+
+	let valids = Valids::compute(&code);
+	let mut machine = Machine::new(code, valids, Vec::new(), STACK_LIMIT, MEMORY_LIMIT);
+	let ok = |_, _: &_| Ok(());
+	let (_, capture) = machine.run(1000, ok, &zero_context());
+
+	assert_eq!(capture, Capture::Exit(ExitReason::Error(ExitError::InvalidJump)));
+}

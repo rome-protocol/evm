@@ -142,16 +142,18 @@ pub fn jump(state: &mut Machine) -> Control {
 /// Conditionally alter the program counter
 pub fn jumpi(state: &mut Machine) -> Control {
 	pop_u256!(state, dest, value);
-	let dest = as_usize_or_fail!(dest, ExitError::InvalidJump);
 
+	// The destination only matters on the taken branch: an untaken JUMPI
+	// ignores it entirely, whatever 256-bit value it holds.
 	if value == U256::zero() {
-		Control::Continue(1)
+		return Control::Continue(1)
+	}
+
+	let dest = as_usize_or_fail!(dest, ExitError::InvalidJump);
+	if state.valids.is_valid(dest) {
+		Control::Jump(dest)
 	} else {
-		if state.valids.is_valid(dest) {
-			Control::Jump(dest)
-		} else {
-			Control::Exit(ExitError::InvalidJump.into())
-		}
+		Control::Exit(ExitError::InvalidJump.into())
 	}
 }
 
