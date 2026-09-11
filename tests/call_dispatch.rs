@@ -6,7 +6,7 @@
 //! Run: `RUSTFLAGS=-Aunexpected_cfgs cargo test --test call_dispatch`.
 
 use evm::{
-	Capture, Context, CreateScheme, ExitError, ExitReason, ExitSucceed,
+	Capture, Context, CreateScheme, ExitError, ExitFatal, ExitReason, ExitSucceed,
 	H160, H256, Handler, Machine, Opcode, Runtime, Stack, Transfer, U256, CONFIG,
 };
 
@@ -68,11 +68,10 @@ impl Handler for CountingHandler {
 		Capture::Exit((ExitSucceed::Stopped.into(), Vec::new()))
 	}
 	fn pre_validate(&mut self, _context: &Context, _opcode: Opcode, _stack: &Stack) -> Result<(), ExitError> { Ok(()) }
-	fn other(&mut self, opcode: Opcode, _stack: &mut Machine) -> Result<(), ExitError> {
-		// Not exercised by this suite's tests; mirrors the fixed real handler's
-		// frame-local shape.
+	fn other(&mut self, opcode: Opcode, _stack: &mut Machine) -> Result<(), ExitFatal> {
+		// Not exercised by this suite's tests; mirrors the real handler's shape.
 		let _ = opcode;
-		Err(ExitError::DesignatedInvalid)
+		Err(ExitFatal::CallErrorAsFatal(ExitError::DesignatedInvalid))
 	}
 }
 
