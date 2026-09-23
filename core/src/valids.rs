@@ -1,4 +1,4 @@
-use alloc::{vec, vec::Vec};
+use alloc::{rc::Rc, vec, vec::Vec};
 
 /// Mapping of valid jump destination from code.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -6,14 +6,22 @@ use alloc::{vec, vec::Vec};
 #[cfg_attr(feature = "with-serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Valids{
-	#[cfg_attr(feature = "with-serde", serde(with = "serde_bytes"))]
-	data: Vec<u8>
+	/// Shared with the other frames of the same address (`Machine::new_shared`); the wire is the byte vector.
+	#[cfg_attr(feature = "with-serde", serde(with = "crate::rc_bytes"))]
+	#[borsh(serialize_with = "crate::rc_bytes::borsh_serialize", deserialize_with = "crate::rc_bytes::borsh_deserialize")]
+	data: Rc<Vec<u8>>
 }
 
 impl Valids {
 	/// Create a new valid mapping from given code bytes.
 	#[must_use]
 	pub fn new(valids: Vec<u8>) -> Self {
+		Self::shared(Rc::new(valids))
+	}
+
+	/// A valid mapping over bytes shared with the other frames of the same address.
+	#[must_use]
+	pub const fn shared(valids: Rc<Vec<u8>>) -> Self {
 		Self{ data: valids }
 	}
 

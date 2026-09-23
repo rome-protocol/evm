@@ -27,7 +27,7 @@ pub use crate::interrupt::{Resolve, ResolveCall, ResolveCreate};
 pub use crate::handler::Handler;
 pub use crate::eval::{save_return_value, save_created_address, Control};
 
-use alloc::vec::Vec;
+use alloc::{rc::Rc, vec::Vec};
 
 /// EVM runtime.
 ///
@@ -53,6 +53,22 @@ impl Runtime {
 	) -> Self {
 		Self {
 			machine: Machine::new(code, valids, data, CONFIG.stack_limit, CONFIG.memory_limit),
+			status: Ok(()),
+			return_data_buffer: Vec::new(),
+			context,
+		}
+	}
+
+	/// Create a new runtime over code and valids shared with the other frames of the same
+	/// address (`Machine::new_shared`).
+	pub fn new_shared(
+		code: Rc<Vec<u8>>,
+		valids: Rc<Vec<u8>>,
+		data: Vec<u8>,
+		context: Context,
+	) -> Self {
+		Self {
+			machine: Machine::new_shared(code, valids, data, CONFIG.stack_limit, CONFIG.memory_limit),
 			status: Ok(()),
 			return_data_buffer: Vec::new(),
 			context,
