@@ -9,19 +9,19 @@ pub struct Valids{
 	/// Shared with the other frames of the same address (`Machine::new_shared`); the wire is the byte vector.
 	#[cfg_attr(feature = "with-serde", serde(with = "crate::rc_bytes"))]
 	#[borsh(serialize_with = "crate::rc_bytes::borsh_serialize", deserialize_with = "crate::rc_bytes::borsh_deserialize")]
-	data: Rc<Vec<u8>>
+	data: Rc<[u8]>
 }
 
 impl Valids {
 	/// Create a new valid mapping from given code bytes.
 	#[must_use]
 	pub fn new(valids: Vec<u8>) -> Self {
-		Self::shared(Rc::new(valids))
+		Self::shared(Rc::from(valids))
 	}
 
 	/// A valid mapping over bytes shared with the other frames of the same address.
 	#[must_use]
-	pub const fn shared(valids: Rc<Vec<u8>>) -> Self {
+	pub const fn shared(valids: Rc<[u8]>) -> Self {
 		Self{ data: valids }
 	}
 

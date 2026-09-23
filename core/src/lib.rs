@@ -47,10 +47,11 @@ pub struct Machine {
 	#[cfg_attr(feature = "with-serde", serde(with = "serde_bytes"))]
 	data: Vec<u8>,
 	/// Program code. Shared: every frame of the same address in one execution holds an `Rc`
-	/// to the one copy the caller made (`new_shared`); on the wire it is the byte vector.
+	/// to the one copy the caller made (`new_shared`) — a slice, so an opcode fetch is one
+	/// indirection as with an owned `Vec`; on the wire it is the byte vector.
 	#[cfg_attr(feature = "with-serde", serde(with = "rc_bytes"))]
 	#[borsh(serialize_with = "rc_bytes::borsh_serialize", deserialize_with = "rc_bytes::borsh_deserialize")]
-	code: Rc<Vec<u8>>,
+	code: Rc<[u8]>,
 	/// Program counter.
 	position: Result<usize, ExitReason>,
 	/// Return value.
@@ -89,7 +90,7 @@ impl Machine {
 		stack_limit: usize,
 		memory_limit: usize
 	) -> Self {
-		Self::new_shared(Rc::new(code), Rc::new(valids), data, stack_limit, memory_limit)
+		Self::new_shared(Rc::from(code), Rc::from(valids), data, stack_limit, memory_limit)
 	}
 
 	/// Create a new machine over code and valids shared with the other frames of the same
@@ -97,8 +98,8 @@ impl Machine {
 	/// and every frame that runs it holds an `Rc` to that one copy.
 	#[must_use]
 	pub fn new_shared(
-		code: Rc<Vec<u8>>,
-		valids: Rc<Vec<u8>>,
+		code: Rc<[u8]>,
+		valids: Rc<[u8]>,
 		data: Vec<u8>,
 		stack_limit: usize,
 		memory_limit: usize

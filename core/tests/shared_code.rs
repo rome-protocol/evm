@@ -17,8 +17,8 @@ fn code() -> Vec<u8> {
 
 #[test]
 fn frames_of_one_address_hold_one_copy_of_its_code() {
-	let code = Rc::new(code());
-	let valids = Rc::new(Valids::compute(&code));
+	let code: Rc<[u8]> = Rc::from(code());
+	let valids: Rc<[u8]> = Rc::from(Valids::compute(&code));
 	let a = Machine::new_shared(code.clone(), valids.clone(), vec![], 1024, 10_000);
 	let b = Machine::new_shared(code.clone(), valids.clone(), vec![], 1024, 10_000);
 	assert_eq!(Rc::strong_count(&code), 3, "two frames and the caller's cache: one copy of the code");
@@ -35,7 +35,7 @@ fn a_shared_machine_serializes_as_an_owning_one() {
 	let valids = Valids::compute(&code);
 	let data = vec![0xaa; 36];
 	let owned = Machine::new(code.clone(), valids.clone(), data.clone(), 1024, 10_000);
-	let shared = Machine::new_shared(Rc::new(code), Rc::new(valids), data, 1024, 10_000);
+	let shared = Machine::new_shared(Rc::from(code), Rc::from(valids), data, 1024, 10_000);
 	let mut w_owned = Vec::new();
 	owned.serialize(&mut w_owned).unwrap();
 	let mut w_shared = Vec::new();

@@ -62,8 +62,8 @@ impl Runtime {
 	/// Create a new runtime over code and valids shared with the other frames of the same
 	/// address (`Machine::new_shared`).
 	pub fn new_shared(
-		code: Rc<Vec<u8>>,
-		valids: Rc<Vec<u8>>,
+		code: Rc<[u8]>,
+		valids: Rc<[u8]>,
 		data: Vec<u8>,
 		context: Context,
 	) -> Self {
