@@ -25,6 +25,7 @@ mod eval;
 mod utils;
 mod primitive_types;
 mod context;
+mod rc_bytes;
 
 pub use crate::memory::Memory;
 pub use crate::stack::Stack;
@@ -34,7 +35,7 @@ pub use crate::error::{Trap, Capture, ExitReason, ExitSucceed, ExitError, ExitRe
 pub use crate::primitive_types::{H160, H256, U256, U512};
 pub use crate::context::{Context, CreateScheme, CallScheme, Transfer};
 
-use alloc::vec::Vec;
+use alloc::{rc::Rc, vec::Vec};
 use crate::eval::{eval, Control};
 
 /// Core execution layer for EVM.
@@ -45,9 +46,12 @@ pub struct Machine {
 	/// Program data.
 	#[cfg_attr(feature = "with-serde", serde(with = "serde_bytes"))]
 	data: Vec<u8>,
-	/// Program code.
-	#[cfg_attr(feature = "with-serde", serde(with = "serde_bytes"))]
-	code: Vec<u8>,
+	/// Program code. Shared: every frame of the same address in one execution holds an `Rc`
+	/// to the one copy the caller made (`new_shared`) — a slice, so an opcode fetch is one
+	/// indirection as with an owned `Vec`; on the wire it is the byte vector.
+	#[cfg_attr(feature = "with-serde", serde(with = "rc_bytes"))]
+	#[borsh(serialize_with = "rc_bytes::borsh_serialize", deserialize_with = "rc_bytes::borsh_deserialize")]
+	code: Rc<[u8]>,
 	/// Program counter.
 	position: Result<usize, ExitReason>,
 	/// Return value.
@@ -86,14 +90,26 @@ impl Machine {
 		stack_limit: usize,
 		memory_limit: usize
 	) -> Self {
-		let valids = Valids::new(valids);
+		Self::new_shared(Rc::from(code), Rc::from(valids), data, stack_limit, memory_limit)
+	}
 
+	/// Create a new machine over code and valids shared with the other frames of the same
+	/// address: the caller copies a contract's code out of its account once per execution
+	/// and every frame that runs it holds an `Rc` to that one copy.
+	#[must_use]
+	pub fn new_shared(
+		code: Rc<[u8]>,
+		valids: Rc<[u8]>,
+		data: Vec<u8>,
+		stack_limit: usize,
+		memory_limit: usize
+	) -> Self {
 		Self {
 			data,
 			code,
 			position: Ok(0),
 			return_range: (0, 0),
-			valids,
+			valids: Valids::shared(valids),
 			memory: Memory::new(memory_limit),
 			stack: Stack::new(stack_limit),
 		}
