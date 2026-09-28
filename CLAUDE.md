@@ -74,6 +74,13 @@ Key changes from upstream SputnikVM:
 - Dropped unused `sha3` dep (PR #25) — SHA3 opcode goes through `Handler::keccak256_h256`
 - Per-opcode allocation overhead eliminated (PR #29) — `Stack::new` pre-reserves 64 slots, `Memory::new` pre-reserves 1 KiB, and `Memory::load_h256(offset)` reads a 32-byte word directly into an `H256` (no per-MLOAD `vec![0; 32]` heap alloc). Behaviour-preserving — `load_h256` is bit-identical to the prior `H256::from_slice(&get(offset, 32))` (verified by the differential test at `core/tests/load_h256.rs`); the two `with_capacity` hints are capacity-only and the Borsh-serialized form is byte-identical. Measured on a Uniswap V3 single-hop swap in the Solana SVM: −33,808 compute units (−2.54%), −23,552 peak heap (−14.5%), bit-identical output.
 - `Config.memory_limit` bounded at 64 MiB (PR #31) — previously `usize::MAX`, which let a single MSTORE/CALLDATACOPY/MCOPY at a huge offset drive `Memory::set`'s `Vec::resize` unbounded and OOM the host in native off-chain emulation (the proxy's `catch_unwind` cannot contain an allocator abort). 64 MiB is far above any gas-affordable EVM memory; on-chain the SBF heap binds first, so behaviour is unchanged for real txs. A compile-time `const _: () = assert!(...)` in `core/tests/memory_limit.rs` fails the build if the default ever regresses to unbounded, plus a runtime `set_past_memory_limit_fails_closed` test asserts `ExitFatal::NotSupported` on writes past the limit.
+- **Interpreter defect closure — Halborn FIND-15 / session-4** (PRs #36, #37 and the fixes merged directly on master). Attacker-chosen operands + frame-local error handling; every fix is guarded by its own integration test:
+  - **CALL out_offset/out_len validated before dispatch** (`tests/call_dispatch.rs`). A too-short CALL or an out-of-range `out_offset` fails the caller's frame instead of running the callee first.
+  - **`*COPY` source-offset clamping** (`tests/copy_offset_clamps.rs`). EXTCODECOPY zero-fills on offsets above `usize::MAX`; RETURNDATACOPY returns `OutOfOffset` (return data has a real length; code does not).
+  - **Undefined opcode / disabled SELFDESTRUCT** (`tests/undefined_opcode.rs`) exits `ExitReason::Fatal` unchanged.
+  - **Oversized memory-only operands are frame-local** (`core/tests/oversized_operand.rs`). MSTORE with an operand above `usize::MAX` is `ExitError::OutOfGas`; unpriced *COPY source offsets clamp + zero-fill (Ethereum-equivalent) rather than fail.
+  - `JUMPI` with a zero condition continues regardless of destination operand (GHSA-pvh2-pj76-4m96 / PR #36). The taken branch still requires a representable, `JUMPDEST`-tagged target.
+  - `BYTE` bounds the index before narrowing; `SDIV` drops the sign-bit mask on the I256 quotient; `SIGNEXTEND` treats byte index 31 as the identity; `Memory::set` treats zero-length writes as no-ops regardless of offset; `Memory::resize_end` enforces `memory_limit`.
 
 ## Dependency Management
 
@@ -89,7 +96,7 @@ Key changes from upstream SputnikVM:
 - After any change, run `cargo test` here, then verify `rome-evm-private` builds against the local checkout (`../evm` path dependency).
 - The SELFDESTRUCT opcode is disabled — do not re-enable.
 - Handler trait modifications affect all EVM execution paths.
-- Two integration tests live here: `core/tests/load_h256.rs` (MLOAD differential added in PR #29) and `tests/memory_limit.rs` (memory-limit fail-closed guard added in PR #31, with a compile-time `const _: () = assert!(CONFIG.memory_limit <= 256 * 1024 * 1024)` invariant). Broad opcode coverage still lives in `rome-evm-private/tests/`.
+- Integration tests here (`tests/` + `core/tests/`) each pin ONE interpreter invariant, and the header comment states which one. Runtime-crate tests: `call_dispatch.rs`, `copy_offset_clamps.rs`, `undefined_opcode.rs`, `memory_limit.rs`. Core-crate tests (need `--manifest-path core/Cargo.toml --features with-serde` to link): `load_h256.rs`, `oversized_operand.rs`. Broad opcode coverage still lives in `rome-evm-private/tests/`. When landing a new interpreter fix, mirror the pattern — one test file per invariant, header-commented with the finding it closes.
 
 ## Change Impact Map
 
